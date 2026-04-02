@@ -6,7 +6,7 @@ using namespace std;
 //Game Summary:
 //In this game, the player controls a character that moves left and right to catch falling fruits
 //The player earns points for each fruit caught, and the game ends when a fruit is missed
-//Every 30 seconds, a special type of fruit will fall that increases the speed of the falling fruits, but also the player, making the game more challenging
+//Every couple points, a special type of fruit will fall that increases the speed of the falling fruits, but also the player, making the game more challenging
 //occasionally, a bad fruit will fall, which the player must avoid catching, as it will decrease their score
 
 class Player
@@ -41,12 +41,23 @@ class Fruit
         int x; //spawn x position
         int y; //tracks falling position
         int speed; //fall speed
+        int points; //points awarded when caught
         bool active; //disables fruit when caught or missed
 
-        void DrawFruit()
+        virtual void DrawFruit()
         {
             if (!active) return; //don't draw if not active
             DrawCircle(x, y, 20, ORANGE); //normal fruit
+        }
+
+        virtual void OnPickup(int &score, int &speedBoost) //special effect when player catches the fruit
+        {
+            score += points;
+        }
+
+        virtual void OnMiss(int &score, int &speedBoost) //special effect when player misses the fruit
+        {
+            // default: no score change
         }
 
         void UpdatePosition() //fall speed update
@@ -58,53 +69,134 @@ class Fruit
         }
 };
 
-const int fruitCount = 5; //fruit array size
-const int gridCount = 8; //divides the screen into 8 sections for fruit spawning
-const int spawnDelay = 60; //delay between fruit spawns in frames (60 frames = 1 second at 60 FPS)
+class SpecialFruit : public Fruit
+{
+    public:
+        void DrawFruit() //overrides normal fruit drawing to be a different color
+        {
+            if (!active) return;
+            DrawCircle(x, y, 20, GOLD);
+        }
 
-int GetRandomGridX(int screenWidth) //splits the screen into 8 sections and returns a random x position within one of those sections for fruit spawning
+        void OnPickup(int &score, int &speedBoost) override
+        {
+            score += points;
+            speedBoost += 1; //increase global speed by 1
+        }
+};
+
+class BadFruit : public Fruit
+{
+    public:
+        void DrawFruit() //overrides normal fruit drawing to be a different color
+        {
+            if (!active) return;
+            DrawCircle(x, y, 20, PURPLE);
+        }
+
+        void OnPickup(int &score, int &speedBoost) override
+        {
+            score -= points; //bad fruit penalizes
+        }
+
+        void OnMiss(int &score, int &speedBoost) override
+        {
+            score += points; //reward for avoiding bad fruit
+        }
+};
+
+int GetRandomGridX(int screenWidth, int gridCount) //splits the screen into 8 sections and returns a random x position within one of those sections for fruit spawning
 {
     int gridWidth = screenWidth / gridCount; //width of each grid section
     int gridIndex = GetRandomValue(0, gridCount - 1); //randomly selects a grid section index
     return gridIndex * gridWidth + gridWidth / 2; //returns the x position of the center of the randomly selected grid section
 }
 
-void SpawnFruit(Fruit &fruit, int screenWidth) //initializes fruit properties and spawns it at a random x position above the screen
+void SpawnFruit(Fruit &fruit, int screenWidth, int speed) //initializes fruit properties and spawns it at a random x position above the screen
 {
-    fruit.x = GetRandomGridX(screenWidth);
+    fruit.x = GetRandomGridX(screenWidth, 8);
     fruit.y = -20; //start above the screen
     fruit.active = true;
+    fruit.speed = speed; //update speed for non active fruits
 }
-
-Player player;
-Fruit fruits[fruitCount];
 
 int main () 
 {
+    const int fruitCount = 10; //fruit array size
+    const int baseFruitSpeed = 5; // base fall speed
+    const int basePlayerSpeed = 7; // base player speed
+
     const int screenWidth = 800; //screen dimensions
     const int screenHeight = 800;
     InitWindow(screenWidth, screenHeight, "Fruit Catch Game"); //window title
     SetTargetFPS(60); //game fps
+    
+    Player player;
+    Fruit fruits[fruitCount];
+    SpecialFruit specialFruits[fruitCount / 2]; // fewer special fruits
+    BadFruit badFruits[fruitCount / 2]; // fewer bad fruits
 
     player.x = screenWidth / 2; //define player variables
     player.y = screenHeight;
-    player.xSpeed = 7;
 
-    int score = 0;
-    int globalSpawnTimer = 0;
-
-    // define fruits
+    int score = 0; //player score
+    int globalSpawnTimer = 0; //global timer to control fruit spawn timing
+    int spawnDelay = 60; //delay between fruit spawns in frames (60 frames = 1 second at 60 FPS)
+    int globalSpeedBoost = 0; //tracks the cumulative speed boost from special fruits
+    
+    // define normal fruits
     for (int i = 0; i < fruitCount; i++)
     {
-        fruits[i].speed = 5;
+        fruits[i].points = 1; //default points for a normal fruit, can be adjusted per class
         fruits[i].active = false;
         fruits[i].x = 0;
         fruits[i].y = -100; //start off-screen
     }
 
+    //define special fruit
+    for (int i = 0; i < fruitCount / 2; i++)
+    {
+        specialFruits[i].points = 3; //more points
+        specialFruits[i].active = false;
+        specialFruits[i].x = 0;
+        specialFruits[i].y = -100; //start off-screen
+    }
+
+    //define bad fruit
+    for (int i = 0; i < fruitCount / 2; i++)
+    {
+        badFruits[i].points = 3; //converts to negative points in OnPickup
+        badFruits[i].active = false;
+        badFruits[i].x = 0;
+        badFruits[i].y = -100; //start off-screen
+    }
+
     while(!WindowShouldClose()) //game loop
     {
         BeginDrawing();
+
+        //global speed updates
+        int currentFruitSpeed = baseFruitSpeed + globalSpeedBoost;
+        player.xSpeed = basePlayerSpeed + globalSpeedBoost;
+        spawnDelay = max(10, 60 - globalSpeedBoost * 5); //decrease spawn delay as speed increases, with a minimum cap
+
+        //update active fruit speeds
+        for (int i = 0; i < fruitCount; i++)
+        {
+            if (fruits[i].active)
+                fruits[i].speed = currentFruitSpeed;
+        }
+        for (int i = 0; i < fruitCount / 2; i++)
+        {
+            if (specialFruits[i].active)
+            {
+                specialFruits[i].speed = currentFruitSpeed;
+            }
+            if (badFruits[i].active)
+            {
+                badFruits[i].speed = currentFruitSpeed;
+            }
+        }
 
         //updating
         player.Update();
@@ -115,13 +207,40 @@ int main ()
         }
         else
         {
-            for (int i = 0; i < fruitCount; i++) //finds an inactive fruit to spawn a new one
+            if (score > 0 && score % 20 == 0) //spawn special fruit every 20 points
             {
-                if (!fruits[i].active)
+                for (int i = 0; i < fruitCount / 2; i++)
                 {
-                    SpawnFruit(fruits[i], screenWidth);
-                    globalSpawnTimer = spawnDelay;
-                    break;
+                    if (!specialFruits[i].active)
+                    {
+                        SpawnFruit(specialFruits[i], screenWidth, currentFruitSpeed);
+                        globalSpawnTimer = spawnDelay;
+                        break;
+                    }
+                }
+            }
+            else if (score > 0 && score % 15 == 0) //spawn bad fruit every 15 points if not spawning a special fruit
+            {
+                for (int i = 0; i < fruitCount / 2; i++)
+                {
+                    if (!badFruits[i].active)
+                    {
+                        SpawnFruit(badFruits[i], screenWidth, currentFruitSpeed);
+                        globalSpawnTimer = spawnDelay;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < fruitCount; i++) //finds an inactive fruit to spawn a new one
+                {
+                    if (!fruits[i].active)
+                    {
+                        SpawnFruit(fruits[i], screenWidth, currentFruitSpeed);
+                        globalSpawnTimer = spawnDelay;
+                        break;
+                    }
                 }
             }
         }
@@ -137,23 +256,74 @@ int main ()
 
                 if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
                 {
-                    score++;
                     fruits[i].active = false;
+                    fruits[i].OnPickup(score, globalSpeedBoost);
                 }
                 else if (fruits[i].y > screenHeight)
                 {
                     fruits[i].active = false;
-                    //lose game or lose life logic could go here
+                    fruits[i].OnMiss(score, globalSpeedBoost);
                 }
             }
         }
 
+        for (int i = 0; i < fruitCount / 2; i++) //update special fruits
+        {
+            if (specialFruits[i].active)
+            {
+                specialFruits[i].UpdatePosition();
+                Vector2 fruitPos = {(float)specialFruits[i].x, (float)specialFruits[i].y};
+                Vector2 headPos = {(float)player.x, (float)player.y - 130};
+                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 120, 60, 80};
+
+                if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
+                {
+                    specialFruits[i].active = false;
+                    specialFruits[i].OnPickup(score, globalSpeedBoost);
+                }
+                else if (specialFruits[i].y > screenHeight)
+                {
+                    specialFruits[i].active = false;
+                    specialFruits[i].OnMiss(score, globalSpeedBoost);
+                }
+            }
+        }
+
+        for (int i = 0; i < fruitCount / 2; i++) //update bad fruits
+        {
+            if (badFruits[i].active)
+            {
+                badFruits[i].UpdatePosition();
+                Vector2 fruitPos = {(float)badFruits[i].x, (float)badFruits[i].y};
+                Vector2 headPos = {(float)player.x, (float)player.y - 130};
+                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 120, 60, 80};
+
+                if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
+                {
+                    badFruits[i].active = false;
+                    badFruits[i].OnPickup(score, globalSpeedBoost);
+                }
+                else if (badFruits[i].y > screenHeight)
+                {
+                    badFruits[i].active = false;
+                    badFruits[i].OnMiss(score, globalSpeedBoost);
+                }
+            }
+        }
+
+        //drawing
         ClearBackground(SKYBLUE); //sky/background color
         DrawRectangle(0, screenHeight - 100, screenWidth, 100, GREEN); //ground color
 
         for (int i = 0; i < fruitCount; i++)
         {
             fruits[i].DrawFruit();
+
+            if (i < fruitCount / 2) // draw special and bad fruits
+            {
+                specialFruits[i].DrawFruit();
+                badFruits[i].DrawFruit();
+            }
         }
         player.DrawPlayer();
 
