@@ -18,8 +18,8 @@ class Player
 
         void DrawPlayer()
         {
-            DrawCircle(x, y - 130, 50, RED); //head
-            DrawRectangle(x - 30, y - 120, 60, 80, RED); //body
+            DrawCircle(x, y - 110, 50, RED); //head
+            DrawRectangle(x - 30, y - 100, 60, 80, RED); //body
         }
 
         void Update() //movement controls update
@@ -123,8 +123,10 @@ void SpawnFruit(Fruit &fruit, int screenWidth, int speed) //initializes fruit pr
 int main () 
 {
     const int fruitCount = 10; //fruit array size
+    const int specialFruitCount = 1; // only 1 special fruit at a time can change later maybe
+    const int badFruitCount = 1; // only 1 bad fruit at a time
     const int baseFruitSpeed = 5; // base fall speed
-    const int basePlayerSpeed = 7; // base player speed
+    const int basePlayerSpeed = 8; // base player speed
 
     const int screenWidth = 800; //screen dimensions
     const int screenHeight = 800;
@@ -133,8 +135,8 @@ int main ()
     
     Player player;
     Fruit fruits[fruitCount];
-    SpecialFruit specialFruits[fruitCount / 2]; // fewer special fruits
-    BadFruit badFruits[fruitCount / 2]; // fewer bad fruits
+    SpecialFruit specialFruits[specialFruitCount]; // only 1 special fruit
+    BadFruit badFruits[badFruitCount]; // only 1 bad fruit
 
     player.x = screenWidth / 2; //define player variables
     player.y = screenHeight;
@@ -154,7 +156,7 @@ int main ()
     }
 
     //define special fruit
-    for (int i = 0; i < fruitCount / 2; i++)
+    for (int i = 0; i < specialFruitCount; i++)
     {
         specialFruits[i].points = 3; //more points
         specialFruits[i].active = false;
@@ -163,7 +165,7 @@ int main ()
     }
 
     //define bad fruit
-    for (int i = 0; i < fruitCount / 2; i++)
+    for (int i = 0; i < badFruitCount; i++)
     {
         badFruits[i].points = 3; //converts to negative points in OnPickup
         badFruits[i].active = false;
@@ -186,12 +188,15 @@ int main ()
             if (fruits[i].active)
                 fruits[i].speed = currentFruitSpeed;
         }
-        for (int i = 0; i < fruitCount / 2; i++)
+        for (int i = 0; i < specialFruitCount; i++)
         {
             if (specialFruits[i].active)
             {
                 specialFruits[i].speed = currentFruitSpeed;
             }
+        }
+        for (int i = 0; i < badFruitCount; i++)
+        {
             if (badFruits[i].active)
             {
                 badFruits[i].speed = currentFruitSpeed;
@@ -207,29 +212,15 @@ int main ()
         }
         else
         {
-            if (score > 0 && score % 20 == 0) //spawn special fruit every 20 points
+            if (score > 0 && score % 20 == 0 && !specialFruits[0].active) //spawn special fruit every 20 points if not already active
             {
-                for (int i = 0; i < fruitCount / 2; i++)
-                {
-                    if (!specialFruits[i].active)
-                    {
-                        SpawnFruit(specialFruits[i], screenWidth, currentFruitSpeed);
-                        globalSpawnTimer = spawnDelay;
-                        break;
-                    }
-                }
+                SpawnFruit(specialFruits[0], screenWidth, currentFruitSpeed);
+                globalSpawnTimer = spawnDelay;
             }
-            else if (score > 0 && score % 15 == 0) //spawn bad fruit every 15 points if not spawning a special fruit
+            else if (score > 0 && score % 15 == 0 && !badFruits[0].active) //spawn bad fruit every 15 points if not spawning a special fruit and not already active
             {
-                for (int i = 0; i < fruitCount / 2; i++)
-                {
-                    if (!badFruits[i].active)
-                    {
-                        SpawnFruit(badFruits[i], screenWidth, currentFruitSpeed);
-                        globalSpawnTimer = spawnDelay;
-                        break;
-                    }
-                }
+                SpawnFruit(badFruits[0], screenWidth, currentFruitSpeed);
+                globalSpawnTimer = spawnDelay;
             }
             else
             {
@@ -251,8 +242,8 @@ int main ()
             {
                 fruits[i].UpdatePosition();
                 Vector2 fruitPos = {(float)fruits[i].x, (float)fruits[i].y};
-                Vector2 headPos = {(float)player.x, (float)player.y - 130};
-                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 120, 60, 80};
+                Vector2 headPos = {(float)player.x, (float)player.y - 110};
+                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 100, 60, 80};
 
                 if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
                 {
@@ -267,14 +258,14 @@ int main ()
             }
         }
 
-        for (int i = 0; i < fruitCount / 2; i++) //update special fruits
+        for (int i = 0; i < specialFruitCount; i++) //update special fruits
         {
             if (specialFruits[i].active)
             {
                 specialFruits[i].UpdatePosition();
                 Vector2 fruitPos = {(float)specialFruits[i].x, (float)specialFruits[i].y};
-                Vector2 headPos = {(float)player.x, (float)player.y - 130};
-                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 120, 60, 80};
+                Vector2 headPos = {(float)player.x, (float)player.y - 110};
+                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 100, 60, 80};
 
                 if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
                 {
@@ -289,14 +280,14 @@ int main ()
             }
         }
 
-        for (int i = 0; i < fruitCount / 2; i++) //update bad fruits
+        for (int i = 0; i < badFruitCount; i++) //update bad fruits
         {
             if (badFruits[i].active)
             {
                 badFruits[i].UpdatePosition();
                 Vector2 fruitPos = {(float)badFruits[i].x, (float)badFruits[i].y};
-                Vector2 headPos = {(float)player.x, (float)player.y - 130};
-                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 120, 60, 80};
+                Vector2 headPos = {(float)player.x, (float)player.y - 110};
+                Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 100, 60, 80};
 
                 if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
                 {
@@ -318,12 +309,14 @@ int main ()
         for (int i = 0; i < fruitCount; i++)
         {
             fruits[i].DrawFruit();
-
-            if (i < fruitCount / 2) // draw special and bad fruits
-            {
-                specialFruits[i].DrawFruit();
-                badFruits[i].DrawFruit();
-            }
+        }
+        for (int i = 0; i < specialFruitCount; i++)
+        {
+            specialFruits[i].DrawFruit();
+        }
+        for (int i = 0; i < badFruitCount; i++)
+        {
+            badFruits[i].DrawFruit();
         }
         player.DrawPlayer();
 
@@ -333,5 +326,6 @@ int main ()
     }
 
     CloseWindow();
+
     return 0;
 }
