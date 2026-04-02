@@ -55,9 +55,9 @@ class Fruit
             score += points;
         }
 
-        virtual void OnMiss(int &score, int &speedBoost) //special effect when player misses the fruit
+        virtual void OnMiss(int &score, int &lives) //special effect when player misses the fruit
         {
-            // default: no score change
+            lives -= 1; //decrease lives on miss, can be used to end game after too many misses
         }
 
         void UpdatePosition() //fall speed update
@@ -99,7 +99,7 @@ class BadFruit : public Fruit
             score -= points; //bad fruit penalizes
         }
 
-        void OnMiss(int &score, int &speedBoost) override
+        void OnMiss(int &score, int &lives) override
         {
             score += points; //reward for avoiding bad fruit
         }
@@ -142,6 +142,7 @@ int main ()
     player.y = screenHeight;
 
     int score = 0; //player score
+    int lives = 3; //player lives, can be used to end game after missing too many fruits
     int globalSpawnTimer = 0; //global timer to control fruit spawn timing
     int spawnDelay = 60; //delay between fruit spawns in frames (60 frames = 1 second at 60 FPS)
     int globalSpeedBoost = 0; //tracks the cumulative speed boost from special fruits
@@ -175,12 +176,20 @@ int main ()
 
     while(!WindowShouldClose()) //game loop
     {
+        if (lives <= 0) //end game if player runs out of lives
+        {
+            ClearBackground(BLACK);
+            DrawText("Game Over!", screenWidth / 2 - 100, screenHeight / 2 - 50, 50, RED);
+            DrawText(TextFormat("Final Score: %d", score), screenWidth / 2 - 120, screenHeight / 2 + 10, 40, WHITE);
+            EndDrawing();
+            continue; //skip the rest of the loop to show game over screen
+        }
         BeginDrawing();
 
         //global speed updates
         int currentFruitSpeed = baseFruitSpeed + globalSpeedBoost;
-        player.xSpeed = basePlayerSpeed + globalSpeedBoost;
-        spawnDelay = max(10, 60 - globalSpeedBoost * 5); //decrease spawn delay as speed increases, with a minimum cap
+        player.xSpeed = basePlayerSpeed + globalSpeedBoost * 2;;
+        spawnDelay = max(10, 60 - globalSpeedBoost * 10); //decrease spawn delay as speed increases, with a minimum cap
 
         //update active fruit speeds
         for (int i = 0; i < fruitCount; i++)
@@ -253,7 +262,7 @@ int main ()
                 else if (fruits[i].y > screenHeight)
                 {
                     fruits[i].active = false;
-                    fruits[i].OnMiss(score, globalSpeedBoost);
+                    fruits[i].OnMiss(score, lives);
                 }
             }
         }
@@ -275,7 +284,7 @@ int main ()
                 else if (specialFruits[i].y > screenHeight)
                 {
                     specialFruits[i].active = false;
-                    specialFruits[i].OnMiss(score, globalSpeedBoost);
+                    specialFruits[i].OnMiss(score, lives);
                 }
             }
         }
@@ -297,7 +306,7 @@ int main ()
                 else if (badFruits[i].y > screenHeight)
                 {
                     badFruits[i].active = false;
-                    badFruits[i].OnMiss(score, globalSpeedBoost);
+                    badFruits[i].OnMiss(score, lives);
                 }
             }
         }
@@ -322,6 +331,8 @@ int main ()
 
         //score
         DrawText(TextFormat("Score: %d", score), 20, 20, 40, BLACK);
+        //lives
+        DrawText(TextFormat("Lives: %d", lives), 20, 70, 40, BLACK);
         EndDrawing();
     }
 
