@@ -1,4 +1,9 @@
 #include <iostream>
+#include <fstream>
+#include <vector>
+#include <algorithm>
+#include <sstream>
+#include <cctype>
 #include <raylib.h>
 
 using namespace std;
@@ -50,7 +55,7 @@ class Fruit
             DrawCircle(x, y, 20, ORANGE); //normal fruit
         }
 
-        virtual void OnPickup(int &score, int &speedBoost) //special effect when player catches the fruit
+        virtual void OnPickup(int &score, int &speedBoost, int &lives) //special effect when player catches the fruit
         {
             score += points;
         }
@@ -78,9 +83,10 @@ class SpecialFruit : public Fruit
             DrawCircle(x, y, 20, GOLD);
         }
 
-        void OnPickup(int &score, int &speedBoost) override
+        void OnPickup(int &score, int &speedBoost, int &lives) override
         {
             score += points;
+            lives += 1; //reward extra life for catching special fruit
             speedBoost += 1; //increase global speed by 1
         }
 };
@@ -94,9 +100,10 @@ class BadFruit : public Fruit
             DrawCircle(x, y, 20, PURPLE);
         }
 
-        void OnPickup(int &score, int &speedBoost) override
+        void OnPickup(int &score, int &speedBoost, int &lives) override
         {
             score -= points; //bad fruit penalizes
+            lives -= 1; //also decreases a life for catching a bad fruit
         }
 
         void OnMiss(int &score, int &lives) override
@@ -118,6 +125,70 @@ void SpawnFruit(Fruit &fruit, int screenWidth, int speed) //initializes fruit pr
     fruit.y = -20; //start above the screen
     fruit.active = true;
     fruit.speed = speed; //update speed for non active fruits
+}
+
+struct LeaderboardEntry
+{
+    string name;
+    int score;
+};
+
+bool LoadLeaderboard(const string &fileName, vector<LeaderboardEntry> &entries)
+{
+    entries.clear();
+    ifstream file(fileName);
+    if (!file.is_open())
+        return false;
+
+    string line;
+    while (getline(file, line))
+    {
+        if (line.empty())
+            continue;
+
+        string name;
+        int score;
+        stringstream ss(line);
+        if (ss >> name >> score)
+        {
+            entries.push_back({name, score});
+        }
+    }
+
+    return true;
+}
+
+bool SaveLeaderboard(const string &fileName, const vector<LeaderboardEntry> &entries)
+{
+    ofstream file(fileName);
+    if (!file.is_open())
+        return false;
+
+    for (const auto &entry : entries)
+    {
+        file << entry.name << " " << entry.score << "\n";
+    }
+
+    return true;
+}
+
+void AddScoreToLeaderboard(const string &fileName, const string &name, int score)
+{
+    vector<LeaderboardEntry> entries;
+    LoadLeaderboard(fileName, entries);
+    entries.push_back({name, score});
+
+    sort(entries.begin(), entries.end(), [](const LeaderboardEntry &a, const LeaderboardEntry &b)
+    {
+        return a.score > b.score;
+    });
+
+    if (entries.size() > 5) //keep only top 5 scores
+    {
+        entries.resize(5);
+    }
+
+    SaveLeaderboard(fileName, entries);
 }
 
 int main () 
@@ -146,6 +217,13 @@ int main ()
     int globalSpawnTimer = 0; //global timer to control fruit spawn timing
     int spawnDelay = 60; //delay between fruit spawns in frames (60 frames = 1 second at 60 FPS)
     int globalSpeedBoost = 0; //tracks the cumulative speed boost from special fruits
+    const string leaderboardFile = "leaderboard.txt";
+    vector<LeaderboardEntry> leaderboard;
+    bool gameStarted = false;
+    bool gameOver = false;
+    bool scoreSaved = false;
+    string currentName;
+    LoadLeaderboard(leaderboardFile, leaderboard);
     
     // define normal fruits
     for (int i = 0; i < fruitCount; i++)
@@ -176,14 +254,124 @@ int main ()
 
     while(!WindowShouldClose()) //game loop
     {
-        if (lives <= 0) //end game if player runs out of lives
+        if (!gameStarted)
         {
+            BeginDrawing();
             ClearBackground(BLACK);
-            DrawText("Game Over!", screenWidth / 2 - 100, screenHeight / 2 - 50, 50, RED);
-            DrawText(TextFormat("Final Score: %d", score), screenWidth / 2 - 120, screenHeight / 2 + 10, 40, WHITE);
+            DrawText("Fruit Catch Game", screenWidth / 2 - 220, screenHeight / 2 - 80, 50, YELLOW);
+            DrawText("Press E to start", screenWidth / 2 - 150, screenHeight / 2 + 20, 30, WHITE);
             EndDrawing();
-            continue; //skip the rest of the loop to show game over screen
+
+            if (IsKeyPressed(KEY_E))
+            {
+                gameStarted = true;
+            }
+            continue;
         }
+
+        if (!gameOver && lives <= 0)
+        {
+            gameOver = true;
+        }
+
+        if (gameOver)
+        {
+            if (!scoreSaved)
+            {
+                int key = GetCharPressed();
+                while (key > 0)
+                {
+                    if ((key >= 32) && (key <= 125) && (currentName.size() < 3))
+                    {
+                        char ch = static_cast<char>(key);
+                        if (isalnum(static_cast<unsigned char>(ch)))
+                        {
+                            if (isalpha(static_cast<unsigned char>(ch)))
+                                ch = static_cast<char>(toupper(static_cast<unsigned char>(ch)));
+                            currentName.push_back(ch);
+                        }
+                    }
+                    key = GetCharPressed();
+                }
+
+                if (IsKeyPressed(KEY_BACKSPACE) && !currentName.empty())
+                {
+                    currentName.pop_back();
+                }
+            }
+
+            BeginDrawing();
+            ClearBackground(BLACK);
+            int gameOverFontSize = 80;
+            int gameOverTextWidth = MeasureText("Game Over!", gameOverFontSize);
+            DrawText("Game Over!", screenWidth / 2 - gameOverTextWidth / 2, screenHeight / 2 - 80, gameOverFontSize, RED);
+            DrawText(TextFormat("Final Score: %d", score), screenWidth / 2 - 120, screenHeight / 2 + 10, 30, WHITE);
+
+            if (!scoreSaved)
+            {
+                string displayName = currentName;
+                while (displayName.size() < 3)
+                    displayName.push_back('_');
+
+                DrawText("Enter your name:", screenWidth / 2 - 160, screenHeight / 2 + 40, 24, WHITE);
+                DrawText(displayName.c_str(), screenWidth / 2 - 50, screenHeight / 2 + 80, 40, YELLOW);
+                DrawText("Press ENTER when ready", screenWidth / 2 - 150, screenHeight / 2 + 140, 20, LIGHTGRAY);
+
+                if (currentName.size() == 3 && IsKeyPressed(KEY_ENTER))
+                {
+                    AddScoreToLeaderboard(leaderboardFile, currentName, score);
+                    LoadLeaderboard(leaderboardFile, leaderboard);
+                    scoreSaved = true;
+                }
+            }
+            else
+            {
+                DrawText("Top Scores:", screenWidth / 2 - 120, screenHeight / 2 + 60, 26, GOLD);
+
+                for (int i = 0; i < (int)leaderboard.size() && i < 5; i++)
+                {
+                    DrawText(TextFormat("%d. %s - %d", i + 1, leaderboard[i].name.c_str(), leaderboard[i].score),
+                             screenWidth / 2 - 140, screenHeight / 2 + 100 + i * 28, 20, RAYWHITE);
+                }
+
+                DrawText("Press R to restart", screenWidth / 2 - 180, screenHeight / 2 + 260, 22, YELLOW);
+                DrawText("Press E to exit", screenWidth / 2 - 180, screenHeight / 2 + 300, 22, YELLOW);
+                if (IsKeyPressed(KEY_R))
+                {
+                    score = 0;
+                    lives = 3;
+                    globalSpawnTimer = 0;
+                    globalSpeedBoost = 0;
+                    gameOver = false;
+                    scoreSaved = false;
+                    currentName.clear();
+                    for (int i = 0; i < fruitCount; i++)
+                    {
+                        fruits[i].active = false;
+                        fruits[i].y = -100;
+                    }
+                    for (int i = 0; i < specialFruitCount; i++)
+                    {
+                        specialFruits[i].active = false;
+                        specialFruits[i].y = -100;
+                    }
+                    for (int i = 0; i < badFruitCount; i++)
+                    {
+                        badFruits[i].active = false;
+                        badFruits[i].y = -100;
+                    }
+                    player.x = screenWidth / 2;
+                }
+                else if (IsKeyPressed(KEY_E))
+                {
+                    break;
+                }
+            }
+
+            EndDrawing();
+            continue;
+        }
+
         BeginDrawing();
 
         //global speed updates
@@ -257,7 +445,7 @@ int main ()
                 if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
                 {
                     fruits[i].active = false;
-                    fruits[i].OnPickup(score, globalSpeedBoost);
+                    fruits[i].OnPickup(score, globalSpeedBoost, lives);
                 }
                 else if (fruits[i].y > screenHeight)
                 {
@@ -279,7 +467,7 @@ int main ()
                 if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
                 {
                     specialFruits[i].active = false;
-                    specialFruits[i].OnPickup(score, globalSpeedBoost);
+                    specialFruits[i].OnPickup(score, globalSpeedBoost, lives);
                 }
                 else if (specialFruits[i].y > screenHeight)
                 {
@@ -301,7 +489,7 @@ int main ()
                 if (CheckCollisionCircles(headPos, 50, fruitPos, 20) || CheckCollisionCircleRec(fruitPos, 20, bodyRect))
                 {
                     badFruits[i].active = false;
-                    badFruits[i].OnPickup(score, globalSpeedBoost);
+                    badFruits[i].OnPickup(score, globalSpeedBoost, lives);
                 }
                 else if (badFruits[i].y > screenHeight)
                 {
