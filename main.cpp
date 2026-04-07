@@ -9,12 +9,6 @@
 
 using namespace std;
 
-//Game Summary:
-//In this game, the player controls a character that moves left and right to catch falling fruits
-//The player earns points for each fruit caught, and the game ends when a fruit is missed
-//Every couple points, a special type of fruit will fall that increases the speed of the falling fruits, but also the player, making the game more challenging
-//occasionally, a bad fruit will fall, which the player must avoid catching, as it will decrease their score
-
 void UpdateFruitList(Fruit arr[], int count, int screenHeight, Player &player, int &score, int &speedBoost, int &lives)
 { //handles updating position of fruits, checking for collisions with the player, and applying the appropriate score/lives changes based on the type of fruit and whether it was caught or missed
     Vector2 headPos = {(float)player.x, (float)player.y - 110}; //player collision positions
