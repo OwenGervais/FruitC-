@@ -13,7 +13,6 @@ void UpdateFruitList(Fruit arr[], int count, int screenHeight, Player &player, i
 { //handles updating position of fruits, checking for collisions with the player, and applying the appropriate score/lives changes based on the type of fruit and whether it was caught or missed
     Vector2 headPos = {(float)player.x, (float)player.y - 110}; //player collision positions
     Rectangle bodyRect = {(float)player.x - 30, (float)player.y - 100, 60, 80};
-
     for (int i = 0; i < count; i++)
     {
         if (!arr[i].active) //skip inactive fruits
